@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1a1a1a; background: #fafafa; }
+h1 { border-bottom: 2px solid #ddd; padding-bottom: 0.3rem; }
+h2 { border-bottom: 1px solid #eee; padding-bottom: 0.2rem; margin-top: 2rem; }
+code { background: #eee; padding: 0.15rem 0.3rem; border-radius: 3px; font-size: 0.9em; }
+pre code { background: #f4f4f4; display: block; padding: 1rem; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+th { background: #eee; }
+ul, ol { padding-left: 1.5rem; }
+li { margin-bottom: 0.3rem; }
+blockquote { border-left: 3px solid #ccc; margin-left: 0; padding-left: 1rem; color: #555; }
+</style>
+</head><body>
+<h1>Storyteller — Voice-Interactive Story App (Spec v1)</h1>
+<h2>Overview</h2>
+<p>A voice-only, web-based storytelling application for children aged 8-12. Children speak to the app, and it tells them an interactive story using natural-sounding voices. Stories are shaped by the children's input in real time.</p>
+<h2>Core Experience</h2>
+<ol>
+<li>The app listens for a <strong>wake word</strong> (default: "Storyteller"). The children can rename it; the new name is persisted.</li>
+<li>Upon hearing the wake word, the app greets the children and asks what kind of story they'd like.</li>
+<li>The app offers suggestions if the children are unsure (e.g. "Would you like a story about a brave explorer, a magical kingdom, or a mystery in space?").</li>
+<li>The children may <strong>choose a narrator voice</strong> from a shortlist, or one is selected at random.</li>
+<li>The app begins telling the story using <strong>TTS</strong> with expressive, character-differentiated voices.</li>
+<li>At any point, the children can <strong>interrupt</strong> by speaking the wake word again. The app stops narrating immediately and enters a command-listening mode, awaiting a question or direction change. The wake word alone (without a follow-on command) acts as a pause.</li>
+<li>The app may also <strong>pause voluntarily</strong> to ask the children questions or offer choices ("What should Luna do next — open the door or climb the wall?"). The app detects the end of the child's response via <strong>Voice Activity Detection (VAD)</strong> with a configurable silence timeout (~1.5s).</li>
+<li>After <strong>5-10 minutes</strong>, unless the children indicate they want to continue, the app brings the story to a natural close.</li>
+<li>Children can say the wake word to <strong>resume</strong> a previous story ("Storyteller, let's continue!"). The app resumes the most recent session from that device (device-based; no speaker recognition in v1).</li>
+<li>The app generates a <strong>story title</strong> shortly after the child describes the desired story (used for the filename), and announces it again at the end.</li>
+<li>A <strong>2-3 sentence recap</strong> is offered after the title ("Today, Luna and the dragon flew to the Crystal Mountains and discovered...").</li>
+<li>The full story text is saved as a <code>.txt</code> file in a designated folder using the title.</li>
+</ol>
+<h2>Voice Commands (beyond wake word)</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>Wake word</em> (start)</td>
+<td>Begin a new story session</td>
+</tr>
+<tr>
+<td><em>Wake word</em> + "let's continue"</td>
+<td>Resume the most recent story for this device</td>
+</tr>
+<tr>
+<td>"Say that again" / "Slower"</td>
+<td>Adjust pacing</td>
+</tr>
+<tr>
+<td>"What happens next?"</td>
+<td>Continue narrating</td>
+</tr>
+<tr>
+<td>"Louder" / "Softer"</td>
+<td>Adjust volume</td>
+</tr>
+</tbody>
+</table>
+<p>The app listens <strong>continuously</strong> (barge-in mode). Voice commands are recognised even while TTS is playing — the mic stays active and uses echo cancellation to filter out its own speech.</p>
+<h2>Voices</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Narrator</strong></td>
+<td>3-5 narrator voices (varying tone, pace, gender). Children may choose, or one is randomised. The children can rename the narrator; this name persists across sessions.</td>
+</tr>
+<tr>
+<td><strong>Characters</strong></td>
+<td>The LLM tags character dialogue with voice attributes (e.g. "deep voice", "young, cheerful"). TTS renders each character with a distinct voice.</td>
+</tr>
+</tbody>
+</table>
+<h2>Safety &amp; Guardrails</h2>
+<ul>
+<li>All LLM responses are filtered for age-appropriateness (8-12).</li>
+<li>No personal data collection beyond what's needed for the session.</li>
+<li>No external links, ads, or upsells.</li>
+<li>Content topics: no violence, horror, or mature themes beyond standard children's content.</li>
+<li>Parent-accessible story logs (plain text files).</li>
+</ul>
+<h2>Error Handling &amp; Resilience</h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Internet down</td>
+<td>"I'm having trouble connecting. Let me try again in a moment." Retries with backoff. After 3 failures, offers a locally cached "emergency story" — a short, pre-written generic story bundled with the app that requires no API calls.</td>
+</tr>
+<tr>
+<td>STT mishears</td>
+<td>"I didn't quite catch that — could you say it again?" Max 3 retries before prompting a different phrasing.</td>
+</tr>
+<tr>
+<td>LLM inappropriate response</td>
+<td>Guardrail filter blocks it. App responds with a safe redirect ("Let me think of something better...").</td>
+</tr>
+<tr>
+<td>TTS failure</td>
+<td>Retry once, then fall back to a simpler voice.</td>
+</tr>
+</tbody>
+</table>
+<h2>Observability &amp; Logging</h2>
+<ul>
+<li>Key events (session start/end, API calls, errors, wake word detection) are logged with timestamps.</li>
+<li>Logs are plain text files, rotated daily, stored alongside story files.</li>
+<li>No personally identifiable information (PII) is logged — only session IDs and event types.</li>
+<li>Logs aid debugging and parent oversight; no external telemetry service is used.</li>
+</ul>
+<h2>Architecture</h2>
+<pre><code>Device (browser)          Home Server              Cloud APIs
+┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+│  Microphone  │◄───────►│   Web App    │◄───────►│  LLM API     │
+│  Speaker     │         │  STT Engine  │         │  TTS API     │
+│  Minimal UI  │         │  Session     │         └──────────────┘
+└──────────────┘         │  Manager     │
+                         │  File Store  │
+Device 2 (browser)◄────►│              │
+                         └──────────────┘
+</code></pre>
+<h2>Concurrent Sessions</h2>
+<ul>
+<li>Multiple devices can use the app simultaneously.</li>
+<li>Each session is <strong>fully isolated</strong>: its own story context, wake word listener, TTS stream, and state.</li>
+<li>No shared state between devices (v1). A "story room" concept (multiple devices joining the same story) is a v2 possibility.</li>
+</ul>
+<h2>Context Management</h2>
+<ul>
+<li>Full conversation history is <strong>not</strong> passed to the LLM on every request.</li>
+<li>A rolling <strong>story summary</strong> is maintained and updated after each exchange.</li>
+<li>Only the summary + recent dialogue are sent as context, keeping costs down and coherence up.</li>
+</ul>
+<h2>Technical Requirements</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Preference</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>STT</strong></td>
+<td>On home server (e.g. Whisper)</td>
+<td>Free. Audio streamed from browser to server. Must handle children's voices reasonably well.</td>
+</tr>
+<tr>
+<td><strong>LLM</strong></td>
+<td>Cloud API, free/low-cost</td>
+<td>e.g. OpenAI GPT-4o-mini, Google Gemini Flash, Mistral. System prompt enforces guardrails.</td>
+</tr>
+<tr>
+<td><strong>TTS</strong></td>
+<td>Low-cost cloud service</td>
+<td>e.g. Google Cloud TTS (Neural/Studio), Azure Neural TTS, Amazon Polly Neural. Must support multiple voices + SSML for expressiveness.</td>
+</tr>
+<tr>
+<td><strong>Wake Word</strong></td>
+<td>Lightweight local detection</td>
+<td>Small model (Porcupine, OpenWakeWord) or keyword-spotting.</td>
+</tr>
+<tr>
+<td><strong>Hosting</strong></td>
+<td>Internal network only</td>
+<td>Accessible via IP + port on home network. No public exposure.</td>
+</tr>
+<tr>
+<td><strong>Storage</strong></td>
+<td>Plain text files in a folder</td>
+<td>One file per story. Filename: <code>YYYY-MM-DD_HH-MM_&lt;title&gt;.txt</code></td>
+</tr>
+</tbody>
+</table>
+<h2>Cost Awareness</h2>
+<ul>
+<li>A <strong>usage counter</strong> tracks LLM and TTS API calls per session and per day.</li>
+<li>A simple <strong>parent dashboard</strong> (minimal web page or CLI) shows:</li>
+<li>Total API calls / estimated cost</li>
+<li>Daily usage trend</li>
+<li>Option to set a daily/monthly cap</li>
+<li>Common phrases and responses are <strong>cached</strong> where possible.</li>
+</ul>
+<h2>Languages</h2>
+<ul>
+<li><strong>v1</strong>: English</li>
+<li><strong>v2</strong>: French (spec does not preclude this)</li>
+</ul>
+<h2>Parent Admin</h2>
+<ul>
+<li>Saved stories are plain text files — the source of truth.</li>
+<li>A minimal <strong>parent web page</strong> lists all stories with:</li>
+<li>Filename, timestamp, word count</li>
+<li>Click to read full text</li>
+<li>Simple shared-secret access in v1 (a configurable token in the URL, e.g. <code>/admin?token=abc123</code>). No full auth system — internal network only provides baseline security.</li>
+</ul>
+<h2>Future (v2+)</h2>
+<ul>
+<li>Story illustrations (AI-generated images alongside narration)</li>
+<li>French support</li>
+<li>Structured "choose your own adventure" mode</li>
+<li>Parent story queue (pre-load topics for kids to discover)</li>
+<li>"Story room" — multiple devices joining the same story</li>
+</ul>
+</body></html>
